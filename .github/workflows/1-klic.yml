@@ -1,0 +1,38 @@
+name: 1 – Vytvořit podpisový klíč
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  klic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Kontrola
+        env:
+          P: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$P" ]; then echo "::error::Chybí tajemství KEYSTORE_PASSWORD (aspoň 8 znaků)."; exit 1; fi
+          if [ ${#P} -lt 8 ]; then echo "::error::Heslo KEYSTORE_PASSWORD musí mít aspoň 8 znaků."; exit 1; fi
+          if [ -f klic/dokvox-upload.jks ]; then echo "::error::Klíč už existuje – nikdy ho nepřepisujte."; exit 1; fi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Vytvořit klíč
+        env:
+          P: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          mkdir -p klic
+          keytool -genkeypair -v -keystore klic/dokvox-upload.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass "$P" -keypass "$P" -dname "CN=Dokvox, O=Dokvox, C=CZ"
+      - name: Uložit do repozitáře
+        run: |
+          git config user.name "dokvox-bot"
+          git config user.email "dokvox-bot@users.noreply.github.com"
+          git add klic/dokvox-upload.jks
+          git commit -m "Podpisový klíč pro Google Play"
+          git push
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZALOHA-podpisovy-klic
+          path: klic/dokvox-upload.jks
